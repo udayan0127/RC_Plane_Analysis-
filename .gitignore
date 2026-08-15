@@ -1,0 +1,16 @@
+# MATLAB
+*.mat
+*.mlx
+*.asv
+
+# Fusion 360 temp files
+*.tmp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Duplicate/scratch files
+RC_Plane*.m
+naca2412*.txt
