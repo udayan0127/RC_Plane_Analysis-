@@ -10,7 +10,7 @@ The work is split into three parts:
 
 1. **CAD modeling** (Fusion 360) — full geometry reconstruction from physical measurements
 2. **Structural analysis** (Fusion Simulation) — wing stress under a 3G maneuvering load
-3. **Aerodynamic analysis** (MATLAB) — stall speed, lift-to-drag performance, and cruise efficiency using NACA 2412 wind tunnel polars
+3. **Aerodynamic analysis** (MATLAB) — stall speed, lift-to-drag performance, and cruise efficiency using NACA 2412 wind tunnel polars with a 3D aircraft drag build-up
 
 ## Aircraft Specifications
 
@@ -61,19 +61,30 @@ The aircraft was modeled as four separate bodies in Fusion 360, then assembled i
 
 | Metric | Value |
 |---|---|
-| Minimum safety factor | **163.75** |
+| Max von Mises stress | 0.265 MPa |
+| Minimum safety factor | 163.75 |
 | Safety factor target | 4.00 |
-| Calculation basis | Yield strength |
+| Calculation basis | Yield strength (stainless steel, ~215 MPa) |
 
 ![Wing Stress Result](CAD_Models/Wing_Stress_Result.jpeg)
 
-The wing is well above the safety margin required — the entire structure reads "above target" on the safety factor scale, with no localized stress concentration near the root or the trailing-edge notch. In practical terms, this means the depron/spar combination has significant reserve strength beyond a 3G load, which tracks with how lightly loaded small foam RC wings typically are relative to their material strength. The main limiting factor for this design is more likely to be foam crushing/dent resistance at the point loads (hand launches, hard landings) than in-flight bending — something a foam-specific material model would capture better than the polystyrene approximation used here.
+The wing sits far above the required safety margin — max von Mises stress of only 0.265 MPa against stainless steel's ~215 MPa yield strength — with no localized stress concentration near the root or the trailing-edge notch. This is a physically valid result but represents a significant over-design: a stainless steel spar has vastly more capacity than a 990g foam aircraft can generate under normal 3G loads.
+
+A more realistic material choice for weight optimization would be a **carbon fiber pultruded tube** (e.g., ~5 mm OD × 3 mm ID, E ≈ 135 GPa, ρ ≈ 1600 kg/m³), which is the industry standard for RC aircraft spars in this weight class. Sizing to a target safety factor of 3–6 with CF would cut the spar mass by roughly 80% while still comfortably surviving the 3G load case. A future iteration of this analysis will run the trade study with that material and geometry.
+
+In practical terms, the main real-world limiting factor for this design is more likely to be foam crushing/dent resistance at point loads (hand launches, hard landings) than in-flight bending — something a foam-specific material model would capture better than the polystyrene approximation used here.
 
 ## Aerodynamic Performance
 
-**Objective:** Characterize stall speed, lift-to-drag performance, and cruise efficiency using real airfoil data rather than empirical estimates.
+**Objective:** Characterize stall speed, lift-to-drag performance, and cruise efficiency using real airfoil data combined with a 3D aircraft drag build-up.
 
-**Method:** NACA 2412 lift and drag polars were pulled from Airfoil Tools (UIUC database, Xfoil-predicted) at Re = 200,000 — matching the Reynolds number at the aircraft's estimated cruise speed and chord length. These polars (CL and CD vs. angle of attack) were used directly in a MATLAB script (`performance_analysis.m`) to compute stall speed and lift-to-drag performance across the flight envelope, rather than relying on assumed CL_max or parabolic drag polar approximations.
+**Method:** NACA 2412 lift and drag polars were pulled from Airfoil Tools (UIUC database, Xfoil-predicted) at Re = 200,000 — matching the Reynolds number at the aircraft's estimated cruise speed and chord length. These sectional polars were then combined with an aircraft-level drag build-up in a MATLAB script (`performance_analysis.m`):
+
+- **Sectional airfoil drag** from the NACA 2412 polars
+- **Induced drag:** CDᵢ = CL² / (π · e · AR), with Oswald efficiency e = 0.80 and AR = 5.18
+- **Parasite drag:** estimated CD₀ = 0.022 (fuselage + tail + interference, flat-plate equivalent)
+
+The Oswald efficiency and parasite drag coefficient are engineering estimates typical for a simple untapered wing and small foam airframe, not measured values — the resulting L/D figures should be read as first-order aircraft-level estimates, not precise performance predictions.
 
 **Results:**
 
@@ -82,22 +93,34 @@ The wing is well above the safety margin required — the entire structure reads
 | Max CL | 1.42 at α = 12° |
 | Stall speed (1G, level flight) | 7.52 m/s (27.1 km/h) |
 | Stall speed (3G maneuver) | 13.02 m/s (46.9 km/h) |
-| Max L/D | 104.57 at 8.78 m/s (31.6 km/h) |
-| Cruise L/D (at 15 m/s) | 44.04 at α = 0.21° |
+| Max aircraft L/D | 10.36 at 11.34 m/s (40.8 km/h) |
+| Cruise L/D (at 15 m/s) | 8.95 at α = 0.21° |
 
-![Aerodynamic Analysis](MATLAB_Analysis/RC_Plane_Performance_Analysis.jpg)
+**Cruise drag breakdown (at 15 m/s):**
 
-The three plots show the NACA 2412 lift curve, L/D vs. airspeed, and the drag polar for the wing. The aircraft cruises at a very low angle of attack (0.21°) with an L/D of 44 — well below the maximum achievable L/D of ~105, which occurs closer to the stall boundary. This is expected and appropriate: cruising near max L/D would leave little margin before stall, so trading some efficiency for a comfortable stability margin is the right call for a hand-launched trainer.
+| Drag component | Value |
+|---|---|
+| CD_airfoil (2D sectional) | 0.00812 |
+| CD_induced (3D finite wing) | 0.00983 |
+| CD_parasite (fuselage + tail) | 0.02200 |
+| **CD_total** | **0.03995** |
+
+![Aerodynamic Analysis](MATLAB_Analysis/RC_Plane_Performance_Analysis.png)
+
+The three plots show the NACA 2412 lift curve, aircraft L/D vs. airspeed, and the full aircraft drag polar (with the 2D sectional polar overlaid for comparison).
+
+Two things are worth noting from the drag breakdown. First, **parasite drag dominates at cruise** (~55% of total drag) — expected for a small, high-frontal-area foam airframe where the wing itself contributes relatively little of the total drag. Second, the aircraft cruises at a very low angle of attack (0.21°) with an L/D of ~9, below the maximum achievable L/D of ~10.4 which occurs closer to the stall boundary. Cruising near max L/D would leave little margin before stall, so trading a bit of efficiency for a comfortable stability margin is the right call for a hand-launched trainer.
 
 ## Results & Conclusions
 
 Putting the structural and aerodynamic analysis together:
 
-- The wing has far more structural margin than it needs for normal 3G maneuvering — safety factor of 163.75 against a target of 4, roughly 40x over. The spar addition, while not strictly necessary at this load level based on the simulation, is cheap insurance against the point loads and mishandling that foam RC wings actually see in practice.
-- The aircraft's low stall speed (7.5 m/s) and high achievable L/D (up to 104) reflect a well-matched wing loading for a lightweight trainer — consistent with easy hand launches and forgiving low-speed handling.
-- Cruise performance sits well clear of stall with a large efficiency margin still in reserve, which is a sensible, conservative trim point for this class of aircraft.
+- The wing has significantly more structural margin than it needs — safety factor of 163 (max stress 0.265 MPa) against a target of 4 — because the stainless steel spar is over-designed for a 990g foam aircraft. A carbon fiber pultruded tube would be the realistic material choice in a future iteration.
+- The aircraft's low stall speed (7.5 m/s) and reasonable aircraft L/D (~10 max, ~9 at cruise) are consistent with a well-matched wing loading for a lightweight trainer — good for easy hand launches and forgiving low-speed handling.
+- Cruise performance sits well clear of stall with a comfortable stability margin still in reserve, which is a sensible, conservative trim point for this class of aircraft.
+- Parasite drag dominates the cruise drag budget, so the biggest real-world efficiency gains would come from cleaning up the fuselage/tail rather than tweaking the airfoil.
 
-The main limitation of this analysis is the use of polystyrene as a stand-in for depron foam in the structural study, and 2D airfoil polars (no 3D induced-drag/finite-wing corrections) in the aerodynamic study. Both are reasonable first-pass approximations for this scope, and the next iteration of this analysis would incorporate a proper foam material model and a finite-wing correction (e.g., lifting-line or an Oswald efficiency factor) to sharpen both results.
+The main limitations of this analysis are (1) the use of polystyrene as a stand-in for depron foam in the structural study, (2) an over-designed stainless steel spar rather than a realistic CF spar, and (3) estimated (not measured) values for Oswald efficiency and parasite drag in the aerodynamic study. All three are reasonable first-pass approximations for this scope. The next iteration would incorporate a proper foam material model, a CF spar sized for a realistic SF of 3–6, and a more refined parasite drag estimate (component build-up rather than a single flat-plate equivalent).
 
 ## Repository Structure
 
